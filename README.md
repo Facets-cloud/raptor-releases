@@ -317,8 +317,8 @@ raptor get variables -p myproject --type secret
 # List with environment-specific values
 raptor get variables -p myproject -e production
 
-# Show actual secret values (requires VIEW_SECRETS permission)
-raptor get variables -p myproject --show-secrets
+# Show actual secret values (requires -e and VIEW_SECRETS permission)
+raptor get variables -p myproject -e production --show-secrets
 
 # Get specific variable across all environments
 raptor get variable API_ENDPOINT -p myproject
@@ -327,7 +327,8 @@ raptor get variable DB_PASSWORD -p myproject --show-secrets
 # Create a variable
 raptor create variable API_URL --default https://api.example.com -p myproject
 
-# Create a secret (secrets cannot have default values)
+# Create a secret (secrets never have a stack default — values are set per
+# environment only, even if the value should be the same in every environment)
 raptor create variable DB_PASSWORD -p myproject --secret \
   --env-values prod=prodSecret123,staging=stagingSecret456
 
@@ -342,14 +343,15 @@ raptor create variable API_URL --default https://api.example.com -p myproject \
 # Bulk create from JSON/YAML file
 raptor create variable -p myproject -f variables.json
 
-# Update a variable
+# Update a variable (--value updates the stack default; not allowed for secrets)
 raptor set variable API_URL --value https://api.v2.com -p myproject
 
 # Update description
 raptor set variable API_URL --description "New API" -p myproject
 
-# Update environment-specific values
+# Update environment-specific values (the only way to set secret values)
 raptor set variable DB_HOST --env-values prod=db.prod.com -p myproject
+raptor set variable DB_PASSWORD --env-values prod=newSecret -p myproject
 
 # Bulk update from file
 raptor set variables -p myproject -f updates.json
@@ -407,6 +409,11 @@ raptor delete variable API_KEY -p myproject --yes
   }
 ]
 ```
+
+> **Note:** Secrets never have a stack-level default value — `stackDefault` is
+> rejected for secrets in both create and update files. Secret values can only
+> be set per environment via `envValues`/`clusterIdToValueMap`, even if the
+> value should be the same in every environment.
 
 **Variable Status Values:**
 - `DEFAULT` - Using the stack default value
@@ -705,10 +712,12 @@ raptor get variables -p <project> [--type variable|secret] [-e <env>] [--show-se
 raptor get variable <variable-name> -p <project> [--show-secrets]
 
 # Create variable or secret
-raptor create variable <name> [value] -p <project> [--secret] [--global] [--description "..."] [--env-values ENV=VALUE,...]
+# (--default is variables-only; secrets are set per environment via --env-values)
+raptor create variable <name> -p <project> [--default "..."] [--secret] [--global] [--description "..."] [--env-values ENV=VALUE,...]
 raptor create variable -p <project> -f <file>  # Bulk create
 
 # Update variable or secret
+# (--value updates the stack default and is variables-only; secret values are set via --env-values)
 raptor set variable <name> -p <project> [--value "..."] [--description "..."] [--global=true|false] [--env-values ENV=VALUE,...]
 raptor set variables -p <project> -f <file>  # Bulk update
 
