@@ -116,6 +116,16 @@ FACETS_PROFILE=production raptor get projects
 
 **Note:** Environment variables (`FACETS_USERNAME`, `FACETS_TOKEN`, `CONTROL_PLANE_URL`) always take precedence over profile-based authentication.
 
+### Read-Only Mode
+
+Control-plane administrators can put the Raptor CLI into read-only mode by enabling the `RAPTOR_READ_ONLY` setting (Settings → Control Plane in the UI, or via the settings API). While enabled:
+
+- All write operations (POST/PUT/DELETE) are blocked with a clear error before any request is sent — this includes `create`, `apply`, `set`, `update`, `delete`, `publish`, `plan`, and release commands.
+- Read commands (`get`, `describe`, `logs`, downloads) work normally and pay no extra latency — the setting is only checked when a write is attempted.
+- The check fails open: if the setting can't be fetched (e.g. an older control plane that doesn't have it), writes proceed as usual.
+
+For emergencies, setting `RAPTOR_BYPASS_READ_ONLY=true` in the environment skips the client-side check entirely. Note that this is an advisory client-side guard, not a server-side security control.
+
 ## Core Commands
 
 ### Blueprint Management (Resources)
@@ -739,6 +749,8 @@ raptor auth can-i <PERMISSION> --environment <env> --project <project>
 
 # Show permission matrix for project
 raptor auth can-i --project <project> --matrix
+```
+
 ### IaC Modules
 
 ```bash
