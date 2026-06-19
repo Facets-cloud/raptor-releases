@@ -494,6 +494,47 @@ raptor create iac-module -f ./modules/service-k8s --skip-validation
 raptor delete iac-module service/k8s/0.3
 ```
 
+### Audit Logs
+
+Query Control Plane audit/activity logs (who changed what, when). Filtering is
+server-side. `--project`, `--environment`, `--user`, and `--target` are
+regex/substring matches; `--entity`, `--action`, and `--source` accept multiple
+values (repeat the flag or comma-separate). Defaults to the last 7 days, newest
+first, capped at 50 events.
+
+`--limit` auto-paginates to collect up to that many events; `--page`/`--size`
+switch to manual single-page mode and cannot be combined with `--limit`.
+`--user` and `--performed-by` are aliases — use one or the other.
+
+```bash
+# Most recent 50 events (last 7 days)
+raptor get audit-logs                    # aliases: raptor get activity / raptor get audit
+
+# Everything a user did in the last 24h
+raptor get audit-logs --since 24h --user alice@example.com
+
+# Blueprint + module changes in a project, deeper history
+raptor get audit-logs -p my-project --entity BLUEPRINT,MODULE --limit 200
+
+# A specific action type
+raptor get audit-logs --action SECRETS_VARIABLES_UPDATE
+
+# Explicit window, JSON for scripting
+raptor get audit-logs --start 2026-06-01 --end 2026-06-07 -o json
+
+# Everything in the window (auto-paginates; hard safety cap of 1000 pages)
+raptor get audit-logs --since 30d --limit 0
+
+# Wide table with project, environment, target, source, id
+raptor get audit-logs -o wide
+```
+
+Flags: `--since` (default `7d`), `--start`/`--end`, `-p/--project`,
+`-e/--environment`, `--user` / `--performed-by` (mutually exclusive aliases),
+`--target`, `--entity`, `--action`, `--source`, `--limit` (default 50; 0 = all
+in window; auto-paginates, capped at 1000 pages), `--page`/`--size` (manual
+single-page mode, mutually exclusive with `--limit`), `-o table|wide|json|yaml`.
+
 ## Key Features
 
 ### Resource File Structure
