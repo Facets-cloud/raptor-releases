@@ -431,6 +431,69 @@ raptor delete variable API_KEY -p myproject --yes
 - `NOT_SET` - No value configured for this environment
 - `NO_ACCESS` - No permission to view this environment
 
+### Notifications (Channels & Subscriptions)
+
+Notification **channels** (delivery destinations) and **subscriptions** (which
+notification types route to which channel) are control-plane-global. Manage them with
+`create`/`set`/`delete`/`get`; a single entity is referenced by ID or unique name. Common cases use flags, full/complex
+payloads use `-f` JSON/YAML. Subscriptions are scoped to a project via `-p` (which
+becomes the required `STACK_NAME` filter, except for `AUDIT_LOG`).
+
+```bash
+# List / get channels and subscriptions
+raptor get channels
+raptor get channels -o wide
+raptor get channels 64a1b2c3d4e5f6 -o yaml
+raptor get subscriptions
+
+# Create a channel (fields depend on --type)
+raptor create channel oncall --type SLACK --address https://hooks.slack.com/services/XXX
+raptor create channel alerts --type EMAIL --emails a@example.com,b@example.com
+raptor create channel pd --type PAGER_DUTY --integration-key 0123456789abcdef
+raptor create channel -f channel.yaml
+
+# Update a channel (flags merge with current state; -f is a full replace)
+raptor set channel 64a1b2c3d4e5f6 --address https://hooks.slack.com/services/NEW
+raptor set channel 64a1b2c3d4e5f6 -f channel.yaml
+
+# Delete one or more channels
+raptor delete channel 64a1b2c3d4e5f6 74b2c3d4e5f6a7 --yes
+
+# Discover notification types and the filter keys each type supports
+raptor get notification-types
+raptor get notification-tags --type APPLICATION_DEPLOYMENT_COMPLETE
+raptor get notification-attributes --type APP_DEPLOYMENT   # webhook payload {{fields}} for --payload-json
+
+# Create a subscription: -p sets the required STACK_NAME filter; channel by id or name
+raptor create subscription deploys -p infra-dev --type APPLICATION_DEPLOYMENT_COMPLETE \
+  --channel-name oncall --application my-app --environment production \
+  --filter DEPLOYMENT_STATUS=SUCCEEDED
+raptor create subscription -f subscription.yaml
+
+# Update (read-modify-write: each flag changes only that filter) / delete
+raptor set subscription 64a1b2c3d4e5f6 --environment production,staging
+raptor delete subscription 64a1b2c3d4e5f6 --yes
+
+# Send a test notification — by id/name (resolve a saved entity)…
+raptor test channel oncall
+raptor test subscription deploys
+# …or ad-hoc, to test a config before creating it (mirrors the UI's create-dialog button)
+raptor test channel --type MS_TEAMS_WORKFLOW --address https://...
+raptor test subscription --channel-name oncall --type ALERT
+```
+
+**Channel types:** `SLACK`, `WEBHOOK`, `MS_TEAMS`, `MS_TEAMS_WORKFLOW` (use `--address`);
+`EMAIL` (use `--emails`); `PAGER_DUTY`, `ZEN_DUTY` (use `--integration-key`).
+
+**Subscription filters** are dynamic per notification type — list the valid keys with
+`raptor get notification-tags --type <TYPE>` and pass any of them via `--filter KEY=value`
+(e.g. `DEPLOYMENT_STATUS`, `RELEASE_TYPE`, `AUDIT_ACTION`, `ENVIRONMENT_TEARDOWN_NOTIFY_BEFORE`).
+Repeat `--filter` or pass the whole set in one quoted flag, `;`-separated
+(`--filter "CLUSTER_NAME=prod;SEVERITY=critical,warning"`); within a key, `,` sets multiple
+values. The ubiquitous ones also have convenience flags: `--environment` (`CLUSTER_NAME`),
+`--application` (`APPLICATION_NAME`), `--release-stream` (`CLUSTER_TYPE`). Filter values are
+plain names (env/app/release-stream names), not IDs.
+
 ### Resource Output Expressions
 
 ```bash
