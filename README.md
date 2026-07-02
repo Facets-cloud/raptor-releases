@@ -497,8 +497,13 @@ plain names (env/app/release-stream names), not IDs.
 ### Resource Output Expressions
 
 ```bash
-# List all available resource output expressions
-raptor get resource-output-expressions -p myproject
+# List all available resource output expressions in a project
+raptor describe expressions -p myproject
+
+# Filter to a kind (or a specific resource), or include a pending file
+raptor describe expressions -p myproject postgres/main-db
+raptor describe expressions -p myproject --kind postgres
+raptor describe expressions -p myproject -f pending-resource.json
 
 # Get output schema for a specific type
 raptor get output-schema @facets/eks
@@ -598,6 +603,273 @@ Flags: `--since` (default `7d`), `--start`/`--end`, `-p/--project`,
 in window; auto-paginates, capped at 1000 pages), `--page`/`--size` (manual
 single-page mode, mutually exclusive with `--limit`), `-o table|wide|json|yaml`.
 
+### Planning & Release Control
+
+Beyond `create release`, raptor exposes the planning and lifecycle operations a
+deployment pipeline needs.
+
+```bash
+# Generate a plan without releasing (dry run); --target limits scope
+raptor plan -p myproject -e dev
+raptor plan -p myproject -e dev --target service/api --target service/worker
+
+# See what depends on a resource (and what it depends on, with --reverse)
+raptor impact service/api -p myproject
+raptor impact service/api -p myproject --reverse
+
+# Download the Terraform plan artifact for a release
+raptor download plan <RELEASE_ID> -p myproject -e dev --save-to ./plan.txt
+
+# Pause / resume the release queue for an environment
+raptor pause releases -p myproject -e dev
+raptor resume releases -p myproject -e dev
+
+# Abort an in-flight release
+raptor abort release <RELEASE_ID> -p myproject -e dev
+
+# Run arbitrary commands inside the Terraform release pod (debugging)
+raptor debug release <RELEASE_ID> terraform state list
+
+# Submit a custom release made of explicit commands (repeat -c)
+raptor create custom-release -p myproject -e dev -c "terraform plan" -c "terraform apply"
+```
+
+### Environment Lifecycle
+
+```bash
+# Launch (provision) an environment; -w tails the launch
+raptor launch environment dev -p myproject -w
+
+# Tear an environment down (requires --yes)
+raptor destroy environment dev -p myproject --yes -w
+```
+
+### Environment Overrides (apply override)
+
+`apply override` is the ergonomic, field-level way to edit environment-specific
+overrides (the read-modify-write counterpart to `set resource-overrides -f`).
+
+```bash
+# Merge individual fields into an existing override
+raptor apply override service/api -p myproject -e dev \
+  --set spec.env.LOG_LEVEL=debug --set spec.runtime.size.memory=2Gi
+
+# Remove a single overridden field
+raptor apply override service/api -p myproject -e dev --unset spec.env.LOG_LEVEL
+
+# Replace the entire spec section (destructive)
+raptor apply override service/api -p myproject -e dev --spec-file overrides.json
+
+# Disable / re-enable a resource in this environment only
+raptor apply override service/api -p myproject -e dev --disabled
+raptor apply override service/api -p myproject -e dev --enabled
+
+# Pin a different module flavor/version for this environment
+raptor apply override service/api -p myproject -e dev --flavor k8s --version 0.3
+```
+
+`--overwrite` discards ALL existing overrides before applying; `--yes`/`-y` skips
+the diff confirmation. `--disabled`/`--enabled` are mutually exclusive.
+
+### Resource Groups
+
+Resource groups are a Control Plane/RBAC construct (independent of blueprint
+branches/PRs). Membership edits are resource-centric and additive — each
+resource's other group memberships are preserved.
+
+```bash
+# Manage groups
+raptor create resource-group --name platform
+raptor get resource-groups
+raptor set resource-group <GROUP_ID> --name platform-core
+raptor delete resource-group <GROUP_ID> --yes
+
+# Attach / detach one or more resources (group by id or unique name)
+raptor attach resource service/api service/worker --group platform -p myproject
+raptor detach resource service/api --group platform -p myproject
+```
+
+### Accounts (Cloud & Version Control)
+
+```bash
+# List / inspect accounts
+raptor get accounts                         # all; --type CLOUD|VERSION_CONTROL|CODER
+raptor get account <ACCOUNT_ID>             # or: --name NAME
+raptor get account-orgs <ACCOUNT_ID>
+raptor get account-token-details --stack myproject
+
+# Create a cloud account (interactive credential entry); -w waits for validation
+raptor create account --provider aws --name my-aws -w
+
+# Create a VCS account with a personal access token
+raptor create github-account --name gh --username me --token <TOKEN> [--org ORG] [--enterprise-host HOST]
+raptor create gitlab-account --name gl --username me --token <TOKEN>
+raptor create bitbucket-account --name bb --username me --token <TOKEN> [--project-key KEY]
+
+# Create a VCS account via the OAuth app flow (-w waits for authorization)
+raptor create github-app-account --name gh-app -w
+raptor create gitlab-app-account --name gl-app -w
+raptor create bitbucket-app-account --name bb-app -w
+
+# Update VCS account credentials
+raptor set github-account <ACCOUNT_ID> --token <NEW_TOKEN>
+
+# Delete an account
+raptor delete account <ACCOUNT_ID> --yes
+```
+
+### Users & Groups
+
+```bash
+# List / inspect (use --expanded for full role detail)
+raptor get users
+raptor get user <USER_ID> --expanded
+raptor get current-user
+raptor get user-groups
+raptor get user-group <GROUP_ID>
+
+# Invite users (optionally straight into a group)
+raptor create user --emails alice@example.com,bob@example.com --group <GROUP_ID>
+
+# Create a group with a base role and optional scoping
+raptor create user-group --name platform --base-role ADMIN \
+  --projects proj-a,proj-b --accounts <ACCT_ID> --additional-roles <ROLE_ID>
+
+# Update membership / roles
+raptor set user <USER_ID> --roles <ROLE_ID> --groups <GROUP_ID>
+raptor set user-group <GROUP_ID> --base-role VIEWER --changelog "scope down"
+
+# Delete
+raptor delete user <USER_ID> --yes
+raptor delete user-group <GROUP_ID> --yes
+```
+
+### Projects & Project Types
+
+```bash
+# List project types
+raptor get project-types
+
+# Create a project type, then a project of that type
+raptor create project-type microservices --description "Microservices stack"
+raptor create project myproject --project-type microservices --clouds aws --description "..."
+
+# Import a managed (built-in) project type template
+raptor import project-type --list-managed
+raptor import project-type --managed facets/aws --name "Production AWS"
+raptor import project-type -f ./aws-project.yml --vcs-account-id <ACCOUNT_ID>
+
+# Map which resource types are allowed for a project type
+raptor create resource-type-mapping microservices --resource-type service/k8s --resource-type postgres/rds
+raptor delete resource-type-mapping microservices --resource-type postgres/rds
+```
+
+### Template Inputs
+
+Template inputs let a project type expose typed, per-environment values.
+
+```bash
+# Define a template input type (schema) for a project
+raptor apply template-input-type -f input-type.json -p myproject [--name MY_TYPE]
+raptor get template-input-types -p myproject
+
+# Set / get values per environment
+raptor create template-input <TYPE>/<UID> -p myproject -e dev --value myvalue
+raptor set template-input <TYPE>/<UID> -p myproject -e dev -f value.json
+raptor get template-inputs -p myproject -e dev
+raptor get template-input <TYPE>/<UID> -p myproject -e dev
+raptor delete template-input <TYPE>/<UID> -p myproject -e dev
+```
+
+### Artifacts & Registries
+
+```bash
+# Registries the control plane knows about
+raptor get registries
+raptor get registry-credentials
+
+# Register an artifact, then point it at an image (per env / git-ref / release-stream)
+raptor create artifact my-api -p myproject
+raptor set artifact-uri my-api -p myproject -e dev --uri myrepo/my-api:abc123
+raptor set artifact-uri my-api -p myproject --release-stream main --uri myrepo/my-api:latest
+
+# Upload a zip bundle artifact
+raptor set artifact-zip my-bundle -p myproject -e dev -f ./bundle.zip
+
+# Inspect
+raptor get artifacts -p myproject
+raptor get artifact-uris my-api -p myproject
+```
+
+### Web Components
+
+Register custom micro-frontends that the Control Plane UI loads.
+
+```bash
+raptor get web-components
+raptor create web-component cost-dashboard \
+  --remote-url https://myorg.github.io/cost-dashboard/cost-dashboard.js \
+  --enabled --icon-url https://example.com/icon.png --tooltip "Cost Dashboard"
+raptor set web-component cost-dashboard --enabled=false
+raptor delete web-component cost-dashboard
+```
+
+### Module Development
+
+The `module` subtree scaffolds and edits an IaC module locally (its `facets.yaml`
+and managed files) before you `create iac-module` / `publish iac-module`. See also
+`raptor module design-guide` and `raptor module development-guide` for the full
+authoring walkthrough printed by the CLI.
+
+```bash
+# Scaffold a new module
+raptor module init \
+  --intent s3 --flavor aws --version 0.1 --cloud aws \
+  --description "S3 bucket with encryption" \
+  --input account:@facets/cloud_account \
+  --requires-provider "provider=aws;input=account" \
+  --output-type @facets/s3
+
+# Inspect the working module / validate it
+raptor module show
+raptor module validate            # -f points at a module dir (default: .)
+
+# Edit inputs and outputs
+raptor module add-input --name vpc --output-type @facets/vpc [--provider aws]
+raptor module remove-input --name vpc
+raptor module add-output ...
+raptor module remove-output ...
+raptor module set-output-provider ...
+
+# Edit the spec schema (UI form fields)
+raptor module set-spec --add bucket_name --type string --title "Bucket Name" \
+  --description "S3 bucket name" --min-length 3 --max-length 63 --ui-order 1
+raptor module set-spec --add environment --type enum --title "Environment" \
+  --description "Target environment" --values "dev,staging,prod"
+raptor module set-spec --remove bucket_name
+raptor module set-spec --show
+
+# Output type (interface) definitions
+raptor module create-output-type @myorg/s3 -f schema.json   # alias: update-output-type
+raptor module get-output-type @myorg/s3
+raptor module delete-output-type @myorg/s3
+
+# Discover available output types for a project type, download module sources
+raptor module discover --project-type microservices
+raptor module download service/k8s/0.2 --save-to ./modules/
+```
+
+### Utility & Maintenance
+
+```bash
+raptor whoami                # Show the authenticated identity / control plane
+raptor upgrade               # Self-update raptor to the latest release
+raptor install-skills        # Install the bundled Claude/AI skills
+raptor blueprint-guide       # Print the blueprint authoring guide
+raptor cache status          # Inspect the local schema/metadata cache
+raptor cache clear           # Clear it
+```
+
 ## Key Features
 
 ### Resource File Structure
@@ -683,7 +955,10 @@ The CLI supports kubectl-style aliases:
 - `environments` = `environment` = `env` = `envs` = `clusters` = `cluster`
 - `resources` = `resource` = `res`
 - `releases` = `release` = `deployments` = `deployment`
+- `iac-module` = `iac-modules` = `module` = `modules`
 - `variables` = `vars` = `var`
+- `channels` = `channel`
+- `subscriptions` = `subscription` = `subs` = `sub`
 
 ## Examples
 
@@ -721,7 +996,7 @@ raptor set resource-inputs -f my-service.json \
   --output-name default
 
 # 6. Get available output expressions for dynamic values
-raptor get resource-output-expressions -p myproject
+raptor describe expressions -p myproject
 
 # 7. Apply the resource to blueprint
 raptor apply -f my-service.json -p myproject
@@ -798,7 +1073,7 @@ raptor get resource-outputs -p <project> -e <env> <type>/<name>
 raptor get kubeconfig -p <project> -e <env> [-o <file>]
 
 # Get expressions
-raptor get resource-output-expressions -p <project>
+raptor describe expressions -p <project> [KIND[/NAME]]
 ```
 
 ### Release Management
