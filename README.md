@@ -671,6 +671,32 @@ raptor apply override service/api -p myproject -e dev --flavor k8s --version 0.3
 `--overwrite` discards ALL existing overrides before applying; `--yes`/`-y` skips
 the diff confirmation. `--disabled`/`--enabled` are mutually exclusive.
 
+#### Bulk enable/disable (many resources, one call)
+
+Enabling or disabling resources across a fresh environment bring-up/teardown is a
+bulk operation. Pass more than one `KIND/NAME`, or use `--type` / `--resources-file`,
+together with `--enabled`/`--disabled` to toggle many resources in a **single**
+server call (`PUT /cc-ui/v1/clusters/{cluster}/resource-enable-disable`) instead of
+one call per resource. This path is **enable/disable only** — spec flags are rejected
+in bulk mode. `--type` enumerates resources via the project's resources-info listing.
+
+```bash
+# Disable several resources at once
+raptor apply override -p myproject -e eu-prod --disabled service/api service/web
+
+# Enable every resource of a type in an environment
+raptor apply override -p myproject -e eu-prod --enabled --type pubsub
+
+# Toggle from a file of newline-delimited KIND/NAME lines
+raptor apply override -p myproject -e eu-prod --disabled --resources-file topics.txt
+
+# Preview the resolved set without applying
+raptor apply override -p myproject -e eu-prod --enabled --type pubsub --dry-run
+```
+
+Child resources of the targeted resources may also be toggled by the server. The
+bulk call is atomic server-side (one git commit + one environment sync).
+
 ### Resource Groups
 
 Resource groups are a Control Plane/RBAC construct (independent of blueprint
