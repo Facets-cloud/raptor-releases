@@ -116,15 +116,15 @@ FACETS_PROFILE=production raptor get projects
 
 **Note:** Environment variables (`FACETS_USERNAME`, `FACETS_TOKEN`, `CONTROL_PLANE_URL`) always take precedence over profile-based authentication.
 
-### Read-Only Mode
+### Read-Only AI Access
 
-Control-plane administrators can put the Raptor CLI into read-only mode by enabling the `RAPTOR_READ_ONLY` setting (Settings → Control Plane in the UI, or via the settings API). While enabled:
+Control-plane administrators can restrict CLI/AI-driven access per user role via the role's **AI access level** (Settings → Roles in the UI, or the custom-role API). When a user's roles only grant `READ`:
 
-- All write operations (POST/PUT/DELETE) are blocked with a clear error before any request is sent — this includes `create`, `apply`, `set`, `update`, `delete`, `publish`, `plan`, and release commands.
-- Read commands (`get`, `describe`, `logs`, downloads) work normally and pay no extra latency — the setting is only checked when a write is attempted.
-- The check fails open: if the setting can't be fetched (e.g. an older control plane that doesn't have it), writes proceed as usual.
+- The control plane rejects all write operations (POST/PUT/DELETE) from raptor — `create`, `apply`, `set`, `update`, `delete`, `publish`, `plan`, and release commands — with a 403 and a self-explanatory message.
+- Read commands (`get`, `describe`, `logs`, downloads) work normally.
+- Enforcement is server-side per user role. If any of the user's roles grants `WRITE` (the default), writes are allowed.
 
-For emergencies, setting `RAPTOR_BYPASS_READ_ONLY=true` in the environment skips the client-side check entirely. Note that this is an advisory client-side guard, not a server-side security control.
+This replaces the retired global `RAPTOR_READ_ONLY` setting (and its `RAPTOR_BYPASS_READ_ONLY` client-side escape hatch), which was advisory and enforced only in the CLI.
 
 ## Core Commands
 
