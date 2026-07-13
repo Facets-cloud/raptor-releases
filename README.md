@@ -644,6 +644,35 @@ raptor launch environment dev -p myproject -w
 raptor destroy environment dev -p myproject --yes -w
 ```
 
+### Copy Configuration Between Environments
+
+`copy config` copies configuration from a source environment to a target
+environment in the same project via
+`PUT /cc-ui/v1/clusters/{targetClusterId}/copy-configurations-selective`. Selection
+is a single INCLUDE **or** EXCLUDE — never both:
+
+- `--include TYPES` — copy **only** the listed configuration types (INCLUDE mode)
+- `--exclude TYPES` — copy **everything except** the listed types (EXCLUDE mode)
+- neither flag — copy **all** configuration types
+
+Valid types: `VARIABLES_SECRETS`, `ARTIFACTS`, `ENVIRONMENT_SETTINGS`, `SCHEDULES`,
+`AVAILABILITY_SCHEDULES`, `OVERRIDES`, `TEMPLATE_INPUTS`.
+
+Copying **overwrites** configuration on the target; you are prompted to confirm
+unless `--yes`/`-y` is passed. Environment names are resolved to cluster IDs
+automatically — you never pass raw cluster IDs.
+
+```bash
+# Copy every configuration type from dev to staging
+raptor copy config -p myproject --from dev --to staging
+
+# Copy only variables/secrets and artifacts
+raptor copy config -p myproject --from dev --to staging --include VARIABLES_SECRETS,ARTIFACTS
+
+# Copy everything except overrides, without a prompt
+raptor copy config -p myproject --from dev --to staging --exclude OVERRIDES --yes
+```
+
 ### Environment Overrides (apply override)
 
 `apply override` is the ergonomic, field-level way to edit environment-specific
@@ -985,6 +1014,7 @@ The CLI supports kubectl-style aliases:
 - `variables` = `vars` = `var`
 - `channels` = `channel`
 - `subscriptions` = `subscription` = `subs` = `sub`
+- `config` = `configs` = `configuration` = `configurations`
 
 ## Examples
 
