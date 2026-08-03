@@ -889,6 +889,18 @@ raptor module init \
 raptor module show
 raptor module validate            # -f points at a module dir (default: .)
 
+# Preview the module's UI form locally — renders the REAL control-plane React
+# form in headless Chrome (no control plane needed). Requires Chrome/Chromium.
+raptor module preview .                              # PNG + JSON report to stdout
+raptor module preview facets.yaml --json r.json --png form.png
+raptor module preview . --mode override              # environment-override page view
+# Exit codes: 0 = rendered clean; 1 = render errors (e.g. array with non-string
+# items) or crash; 2 = tool failure (Chrome missing, bad yaml, timeout).
+# Agent/CI loop: run with --json, assert .ok == true, inspect .errors/.warnings/
+# .hidden and per-field .degraded flags; view the PNG for layout.
+# Refresh the embedded UI bundle after form-engine changes in control-plane-ui-react:
+#   scripts/vendor-preview.sh
+
 # Edit inputs and outputs
 raptor module add-input --name vpc --output-type @facets/vpc [--provider aws]
 raptor module remove-input --name vpc
