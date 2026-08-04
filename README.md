@@ -686,6 +686,12 @@ raptor apply override service/api -p myproject -e dev \
 # Remove a single overridden field
 raptor apply override service/api -p myproject -e dev --unset spec.env.LOG_LEVEL
 
+# Removal works even when the override value already equals the blueprint value.
+# The effective config does not change, but the key leaves the override document,
+# so later blueprint edits reach this environment instead of staying pinned.
+raptor apply override redis/cache -p myproject -e prod \
+  --unset spec.sizing.snapshot_window --yes
+
 # Replace the entire spec section (destructive)
 raptor apply override service/api -p myproject -e dev --spec-file overrides.json
 
@@ -697,8 +703,25 @@ raptor apply override service/api -p myproject -e dev --enabled
 raptor apply override service/api -p myproject -e dev --flavor k8s --version 0.3
 ```
 
-`--overwrite` discards ALL existing overrides before applying; `--yes`/`-y` skips
-the diff confirmation. `--disabled`/`--enabled` are mutually exclusive.
+`--overwrite` discards ALL existing overrides before applying, rebuilding the
+document from the flags on that one command — keys you do not restate are lost,
+and the command names them on stderr first. It cannot be combined with `--unset`:
+the rebuild starts from an empty document, so there would be nothing for `--unset`
+to remove and the result would just be an empty override. Use `--unset` on its own
+to drop a key and keep the rest. `--yes`/`-y` skips the diff confirmation.
+`--disabled`/`--enabled` are mutually exclusive.
+
+The "nothing to apply" short-circuit compares the **override document** — the
+artifact the command writes — not the merged blueprint ⊕ override config. Re-running
+an identical apply is still skipped, but a change that only affects the override
+document (dropping a key whose value coincides with the blueprint) is applied and
+shown as a document diff. Containers that a removal empties are pruned, so
+`--unset spec.sizing.snapshot_window` does not leave `spec.sizing: {}` behind.
+
+If a `--unset` key is not present the command warns naming it on stderr. A call
+that asked only for removals and removed nothing is reported as a no-op and exits
+0 without writing — re-running a removal that has already landed is safe, and an
+override document is never created for a resource that has none.
 
 #### Bulk enable/disable (many resources, one call)
 
