@@ -830,7 +830,7 @@ raptor get project-types
 
 # Create a project type, then a project of that type
 raptor create project-type microservices --description "Microservices stack"
-raptor create project myproject --project-type microservices --clouds aws --description "..."
+raptor create project myproject --project-type microservices --description "..."
 
 # Import a managed (built-in) project type template
 raptor import project-type --list-managed
