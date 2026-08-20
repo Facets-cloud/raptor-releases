@@ -828,16 +828,31 @@ raptor delete user-group <GROUP_ID> --yes
 # List project types
 raptor get project-types
 
-# Create a project type, then a project of that type
-raptor create project-type microservices --description "Microservices stack"
-raptor create project myproject --project-type microservices --description "..."
-
-# Import a managed (built-in) project type template
+# Project types are always IMPORTED — see what the official repo ships, then import one
 raptor import project-type --list-managed
 raptor import project-type --managed facets/aws --name "Production AWS"
+
+# Import your own: a minimal YAML needs only `name` and `description`, and
+# yields a project type with no resource-type mappings — which the control
+# plane reads as "every resource type allowed"
+raptor import project-type -f ./microservices.yml
 raptor import project-type -f ./aws-project.yml --vcs-account-id <ACCOUNT_ID>
 
-# Map which resource types are allowed for a project type
+# Re-importing an existing name UPDATES it in place — import is the create and
+# the update path both (raptor#353)
+raptor import project-type -f ./microservices.yml
+
+# Delete a project type (by name). Projects still using it block the delete;
+# raptor names them first so you know what to move.
+raptor delete project-type microservices
+raptor delete project-type old-a old-b --yes
+
+# Then create a project of that type
+raptor create project myproject --project-type microservices --description "..."
+
+# Map which resource types are allowed for a project type.
+# NOTE: no mappings = ALL resource types allowed. The FIRST mapping flips the
+# project type from permissive to restrictive — only mapped types remain usable.
 raptor create resource-type-mapping microservices --resource-type service/k8s --resource-type postgres/rds
 raptor delete resource-type-mapping microservices --resource-type postgres/rds
 ```
@@ -874,10 +889,40 @@ raptor set artifact-uri my-api -p myproject --release-stream main --uri myrepo/m
 # Upload a zip bundle artifact
 raptor set artifact-zip my-bundle -p myproject -e dev -f ./bundle.zip
 
-# Inspect
+# Inspect — `get builds` also carries the build ids and a PROMOTED column
 raptor get artifacts -p myproject
-raptor get artifact-uris my-api -p myproject
+raptor get builds my-api -p myproject
+
+# Promote — registers the build at the NEXT stage of the artifact's promotion
+# workflow (DEV -> QA -> ...). It does not flip a flag on the build you name.
+raptor promote build -a my-api --tag v1.4.2
+raptor promote build -a my-api --id 6a05ba178a06280c7b9c1974
+
+# Delete a build registration, by id (does NOT remove the image from the registry)
+raptor delete build 6a05ba178a06280c7b9c1974
+raptor delete build 6a05ba178a06280c7b9c1974 62287c34fab757000147dea3 --yes
+
+# Delete the artifact itself — refuses while builds are still registered under it
+raptor delete artifact my-api -p myproject
 ```
+
+An **artifact** is the named integration (the control plane calls it an Artifact
+CI); a **build** is one registered image or zip beneath it. `create artifact` and
+`delete artifact` act on the first, `promote build` and `delete build` on the
+second.
+
+**Promote** takes `-a ARTIFACT` plus exactly one of `--tag` or `--id` — the API is
+addressed by both, and a build record carries no reference back to its artifact.
+`--tag` reads the build's tag field, or the tag in its image URI when that field is
+empty — which it is for anything registered by `set artifact-uri`. Prefer `--id`
+anyway: a digest-only reference has no tag at all, and the same tag is often
+registered against several streams, so an ambiguous `--tag` is rejected rather than
+resolved arbitrarily. The control plane requires the artifact to have a promotion
+workflow, the build to be classified, and a next stage to exist — otherwise it
+reports why.
+
+**Delete build** is addressed by build id alone, so that is all it takes. Ids come
+from `raptor get builds ARTIFACT_NAME -p PROJECT -o json`.
 
 ### Web Components
 
