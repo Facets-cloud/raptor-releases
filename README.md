@@ -176,7 +176,52 @@ raptor create release -p myproject -e dev --target service/api -w
 
 # View release logs
 raptor logs release -p myproject -e dev -f <RELEASE_ID>
+
+# Tag a release after it exists (see Labels below)
+raptor set release-labels <RELEASE_ID> -p myproject -e dev --label stable
 ```
+
+### Labels
+
+Labels are reusable tags a release can carry. Manage the catalog, then put
+labels on a release with `set release-labels`.
+
+```bash
+# List the release labels
+raptor get labels
+raptor get labels -o json
+
+# Create one (colour optional; without --color the platform default is used)
+raptor create label stable
+raptor create label hotfix --color "#FF5733"
+
+# Delete one — the control plane also removes it from every release carrying it
+raptor delete label stale-tag
+
+# Put labels on a release. This REPLACES its whole label set
+raptor set release-labels 6a86f8c635cd953fd938b27c -p myproject -e dev -l stable
+raptor set release-labels 6a86f8c6... -p myproject -e dev -l stable -l "TICKET-421"
+
+# Remove every label from a release
+raptor set release-labels 6a86f8c6... -p myproject -e dev --clear
+```
+
+To tag from a script, give the trigger a trace id you already know, then use it
+to address the release afterwards — no output parsing:
+
+```bash
+TRACE=$(uuidgen)
+raptor create release -p myproject -e dev --trace-id "$TRACE" -w
+raptor set release-labels -p myproject -e dev --trace-id "$TRACE" -l "$TICKET"
+```
+
+Notes:
+- A label name that does not exist is created automatically, with the platform's
+  default colour.
+- Names are matched **case-sensitively**, and may be at most 100 characters —
+  both match the control plane.
+- Labels cannot be attached while a release is being created; no release
+  endpoint accepts one. Label the release once it exists.
 
 ### Environment Management
 
@@ -723,14 +768,18 @@ that asked only for removals and removed nothing is reported as a no-op and exit
 0 without writing — re-running a removal that has already landed is safe, and an
 override document is never created for a resource that has none.
 
-#### Bulk enable/disable (many resources, one call)
+#### Bulk operations (many resources, one call)
 
-Enabling or disabling resources across a fresh environment bring-up/teardown is a
-bulk operation. Pass more than one `KIND/NAME`, or use `--type` / `--resources-file`,
-together with `--enabled`/`--disabled` to toggle many resources in a **single**
-server call (`PUT /cc-ui/v1/clusters/{cluster}/resource-enable-disable`) instead of
-one call per resource. This path is **enable/disable only** — spec flags are rejected
-in bulk mode. `--type` enumerates resources via the project's resources-info listing.
+Standing up or tearing down an environment is a bulk operation. Pass more than one
+`KIND/NAME`, or use `--type` / `--resources-file`, and raptor writes the whole target
+set in a **single** server call instead of one call per resource. `--type` enumerates
+the resources of that kind in the **environment** (an environment holds names the
+project blueprint does not: exploded template instances and env-level add-ons).
+
+There are two bulk paths and they cannot be mixed in one invocation: **state**
+(`--enabled/--disabled`, `--inherit/--no-inherit`) and **spec** (the `--set` family,
+`--spec`/`--spec-file`, `--flavor`/`--version`). `--overwrite`, `--input` and
+`--unset-input` stay single-resource only.
 
 ```bash
 # Disable several resources at once
@@ -747,7 +796,40 @@ raptor apply override -p myproject -e eu-prod --enabled --type pubsub --dry-run
 ```
 
 Child resources of the targeted resources may also be toggled by the server. The
-bulk call is atomic server-side (one git commit + one environment sync).
+bulk state call is atomic server-side (one git commit + one environment sync).
+
+##### Bulk spec overrides
+
+Spec flags in bulk mode write many override documents in one call
+(`POST /cc-ui/v1/clusters/{cluster}/overrides`), with one git commit and one
+environment sync.
+
+```bash
+# Change a field on every resource of a type
+raptor apply override -p myproject -e eu-prod --type pubsub --set spec.retention=7
+
+# Pin many resources to another module version
+raptor apply override -p myproject -e eu-prod --type pubsub --version 0.4
+
+# Preview the merged documents without writing
+raptor apply override -p myproject -e eu-prod --type pubsub --set spec.retention=7 --dry-run
+```
+
+Three things differ from the state path:
+
+- **The endpoint replaces each override document.** raptor reads the current documents
+  first and merges, so keys you do not name (`disabled`, `inputs`, flavor/version pins,
+  `advanced.inherit_from_base`) are carried over. A concurrent writer between the read
+  and the write loses its change.
+- **Child resources are not included.** There is no cascade.
+- **The batch is not atomic.** A failure part-way can leave some resources written, and
+  the response does not report which. Re-run with `--dry-run` to see what still
+  differs — the set that still differs is the set that did not land — and re-running
+  the command itself is safe, because targets that already match are skipped.
+
+Targets whose merged document already matches are skipped and counted, so a completed
+sweep can be re-run. The preview shows the document diff for the first 20 changing
+targets plus a roll-up of which keys change.
 
 ### Resource Groups
 
