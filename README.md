@@ -229,7 +229,7 @@ Notes:
 # List environments in a project
 raptor get environments -p myproject
 
-# Check resource deployment status
+# Check whether a resource has changes pending release (same rule as the UI badge)
 raptor get resource-status -p myproject -e dev service/api
 
 # Get/set environment-specific overrides
@@ -1227,7 +1227,7 @@ raptor create release -p myproject -e dev -w -m "Deploy my-service"
 raptor get releases -p myproject -e dev
 raptor logs release -p myproject -e dev -f <RELEASE_ID>
 
-# 10. Check deployment status
+# 10. Check whether the resource has changes pending release
 raptor get resource-status -p myproject -e dev service/my-service
 ```
 
@@ -1279,8 +1279,8 @@ raptor set resource-inputs -f <file> --input-name <name> --resource <type>/<name
 # List environments
 raptor get environments -p <project>
 
-# Resource status and overrides
-raptor get resource-status -p <project> -e <env> <type>/<name>
+# Pending-release status and overrides
+raptor get resource-status -p <project> -e <env> [<type>/<name>] [--pending-only]
 raptor get resource-overrides -p <project> -e <env> <type>/<name>
 raptor set resource-overrides -p <project> -e <env> -f <file> <type>/<name>
 
