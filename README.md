@@ -252,6 +252,7 @@ raptor get overrides -p myproject -e dev service/api --history --diff v2..v5
 raptor get resource-outputs -p myproject -e dev service/api
 
 # Get kubeconfig for Kubernetes environments
+# (bound to the <user>-raptor service account; access = the role's AI permissions)
 raptor get kubeconfig -p myproject -e dev
 ```
 
@@ -447,6 +448,17 @@ raptor delete variable API_KEY -p myproject --yes
 ]
 ```
 
+Bulk create accepts these same fields in YAML. `envValues` uses environment
+names; `clusterIdToValueMap` accepts IDs (and legacy names). Raptor resolves
+names once and sends one bulk POST. The entire batch must pass strict validation;
+unknown fields/targets, duplicates, nulls, conflicting assignments and empty env
+values fail before writes. Put per-item settings in the file, not single-variable
+flags. Values must be strings; quote numeric/boolean-looking YAML values.
+
+The server applies environment values separately and can return success after
+partial failures. Verify persistence before retrying. See
+[bulk-create behavior](docs/variables-and-secrets.md#bulk-create-with-environment-values).
+
 **File format for bulk update (JSON):**
 ```json
 [
@@ -550,9 +562,24 @@ raptor describe expressions -p myproject postgres/main-db
 raptor describe expressions -p myproject --kind postgres
 raptor describe expressions -p myproject -f pending-resource.json
 
+# Find candidate references for a concrete value in an environment
+raptor describe expressions -p myproject -e stage postgres/main-db --value 'db.internal'
+
+# Restrict to exact names within a type; repeat --value to share reads
+raptor describe expressions -p myproject -e stage --kind postgres --names db,events \
+  --value 'db.internal' --value 'events.internal' -o json
+
 # Get output schema for a specific type
 raptor get output-schema @facets/eks
 ```
+
+Reverse value lookup requires `-p`, `-e`, and at least one resource filter.
+Matches are exact public strings from stored runtime outputs; results identify
+candidate expressions without echoing query values. Public output indexes are
+cached for five minutes (unavailable outputs for 30 seconds). Use `--refresh`
+to refresh selected records or `--no-cache` to bypass disk access. Results show
+API calls, observation times and partial failures. See
+[reverse value lookup](docs/2026-09-14-reverse-value-lookup.md).
 
 ### IaC Module Management
 
@@ -590,12 +617,18 @@ raptor get iac-module service/k8s/0.2 --history --diff
 # Diff a range and include per-file changes
 raptor get iac-module service/k8s/0.2 --history --diff v38..v40 --include-files
 
-# Upload a new module (two-step workflow - recommended)
+# First publication for this type/flavor (two-step workflow)
 raptor create iac-module -f ./modules/service-k8s    # Upload as PREVIEW
-raptor publish iac-module service/k8s/0.3            # Publish when ready
+raptor publish iac-module service/k8s/0.3            # First publication when ready
 
-# Upload and publish immediately (one-step)
+# Upload and publish for the first time (one-step)
 raptor create iac-module -f ./modules/service-k8s --publish
+
+# Compatible update: keep the published contract version
+raptor publish iac-module service/k8s/0.3 --backward-compatible yes
+
+# Breaking update: upload and publish a version greater than all published versions
+raptor create iac-module -f ./modules/service-k8s --version 0.4 --publish --versionupgrade
 
 # Upload with version override
 raptor create iac-module -f ./modules/service-k8s --version 0.4
@@ -606,6 +639,14 @@ raptor create iac-module -f ./modules/service-k8s --skip-validation
 # Delete a module
 raptor delete iac-module service/k8s/0.3
 ```
+
+Publication is non-interactive and requires a nonempty root `README.md` in the
+uploaded PREVIEW. Compatible updates require `--backward-compatible yes` on the
+same published version; breaking updates require a greater version and
+`--versionupgrade`. First publication uses neither flag, and the flags cannot
+be combined. `--skip-validation` skips local upload checks only. If upload
+succeeds but publication fails, the command returns nonzero and reports the
+PREVIEW for recovery. See [publish guards](docs/2026-09-14-module-publish-guards.md).
 
 ### Audit Logs
 
@@ -910,19 +951,18 @@ raptor delete user-group <GROUP_ID> --yes
 # List project types
 raptor get project-types
 
-# Project types are always IMPORTED — see what the official repo ships, then import one
-raptor import project-type --list-managed
-raptor import project-type --managed facets/aws --name "Production AWS"
+# Discover reference modules locally and choose exact identities from the result
+git clone https://github.com/Facets-cloud/facets-modules-redesign.git ./reference-modules
+raptor module discover --source ./reference-modules -o json
+raptor create iac-module --source ./reference-modules \
+  --module TYPE/FLAVOR/VERSION --module OTHER_TYPE/FLAVOR/VERSION -o json
+# Test and publish each selected module; linked module repos retain their CI workflow.
 
-# Import your own: a minimal YAML needs only `name` and `description`, and
-# yields a project type with no resource-type mappings — which the control
-# plane reads as "every resource type allowed"
-raptor import project-type -f ./microservices.yml
-raptor import project-type -f ./aws-project.yml --vcs-account-id <ACCOUNT_ID>
-
-# Re-importing an existing name UPDATES it in place — import is the create and
-# the update path both (raptor#353)
-raptor import project-type -f ./microservices.yml
+# Optional: unrestricted project type, or select published pairs with --resource-type
+raptor create project-type microservices --description "Microservices catalog"
+raptor create project-type selected-services --description "Selected services" \
+  --resource-type service/k8s --resource-type postgres/rds
+# Old import project-type commands are disabled; manifests never select uploads.
 
 # Delete a project type (by name). Projects still using it block the delete;
 # raptor names them first so you know what to move.
@@ -933,8 +973,8 @@ raptor delete project-type old-a old-b --yes
 raptor create project myproject --project-type microservices --description "..."
 
 # Map which resource types are allowed for a project type.
-# NOTE: no mappings = ALL resource types allowed. The FIRST mapping flips the
-# project type from permissive to restrictive — only mapped types remain usable.
+# No mappings = ALL resource types allowed. Adding mappings preserves unrestricted
+# types; create a new type with --resource-type to curate its initial catalog.
 raptor create resource-type-mapping microservices --resource-type service/k8s --resource-type postgres/rds
 raptor delete resource-type-mapping microservices --resource-type postgres/rds
 ```
@@ -1081,7 +1121,7 @@ raptor module download service/k8s/0.2 --save-to ./modules/
 ```bash
 raptor whoami                # Show the authenticated identity / control plane
 raptor upgrade               # Self-update raptor to the latest release
-raptor install-skills        # Install the bundled Claude/AI skills
+raptor install skill --agent codex  # Install the standalone Raptor skill (claude/gemini also supported)
 raptor blueprint-guide       # Print the blueprint authoring guide
 raptor cache status          # Inspect the local schema/metadata cache
 raptor cache clear           # Clear it
@@ -1292,6 +1332,7 @@ raptor get kubeconfig -p <project> -e <env> [-o <file>]
 
 # Get expressions
 raptor describe expressions -p <project> [KIND[/NAME]]
+raptor describe expressions -p <project> -e <env> KIND/NAME --value <value> [--refresh | --no-cache]
 ```
 
 ### Release Management
@@ -1361,8 +1402,8 @@ raptor get iac-module <type>/<flavor>/<version> --usages
 
 # Upload and publish modules
 raptor create iac-module -f <directory> [--type <type>] [--flavor <flavor>] [--version <version>]
-raptor create iac-module -f <directory> --publish
-raptor publish iac-module <type>/<flavor>/<version>
+raptor create iac-module -f <directory> --publish [--backward-compatible yes | --versionupgrade]
+raptor publish iac-module <type>/<flavor>/<version> [--backward-compatible yes | --versionupgrade]
 raptor delete iac-module <type>/<flavor>/<version>
 ```
 
