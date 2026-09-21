@@ -972,6 +972,13 @@ raptor delete project-type old-a old-b --yes
 # Then create a project of that type
 raptor create project myproject --project-type microservices --description "..."
 
+# GitOps-enabled project on one of your VCS integrations (name or ID from
+# `raptor get accounts --type VERSION_CONTROL`); --org picks the org/group/workspace
+raptor create project myproject --project-type microservices --vcs-account acme-github --org acme
+# ...or attach an existing repository that already holds a blueprint, instead of creating one
+raptor create project myproject --project-type microservices --vcs-account acme-github \
+  --vcs-url https://github.com/acme/infra.git --branch main --relative-path projects/myproject
+
 # Map which resource types are allowed for a project type.
 # No mappings = ALL resource types allowed. Adding mappings preserves unrestricted
 # types; create a new type with --resource-type to curate its initial catalog.
