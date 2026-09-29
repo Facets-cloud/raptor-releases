@@ -215,6 +215,8 @@ raptor create release -p myproject -e dev --trace-id "$TRACE" -w
 raptor set release-labels -p myproject -e dev --trace-id "$TRACE" -l "$TICKET"
 ```
 
+`raptor plan` and `raptor apply plan` take `--trace-id` the same way.
+
 Notes:
 - A label name that does not exist is created automatically, with the platform's
   default colour.
