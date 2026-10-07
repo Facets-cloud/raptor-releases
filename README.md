@@ -1130,6 +1130,7 @@ raptor module download service/k8s/0.2 --save-to ./modules/
 ```bash
 raptor whoami                # Show the authenticated identity / control plane
 raptor upgrade               # Self-update raptor to the latest release
+raptor report -m "..."       # Send a friction report to Facets (what went wrong, how you recovered)
 RAPTOR_CHANNEL=unstable raptor upgrade  # Follow the unstable channel: a dev build of every merge to main
 raptor install skill --agent codex  # Install the standalone Raptor skill (claude/gemini also supported)
 raptor blueprint-guide       # Print the blueprint authoring guide
