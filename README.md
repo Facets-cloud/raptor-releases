@@ -4,35 +4,45 @@ A kubectl-style CLI tool for managing Facets Control Plane resources, infrastruc
 
 ## Installation
 
+### Install script (macOS and Linux)
+
+```bash
+curl -fsSL https://cross.facetsapp.cloud/cli/install.sh | sh -s -- raptor
+```
+
+The script downloads the release for your platform, checks its SHA-256, and puts
+it in `~/.local/bin`. It does not use sudo, so a later `raptor upgrade` needs no
+sudo either. If `~/.local/bin` is not on your PATH, the script adds one line to
+your shell profile; open a new terminal after it. It also lists every other
+raptor on your PATH.
+
+Options (environment variables):
+- `FACETS_INSTALL_DIR`: install into another folder.
+- `FACETS_NO_MODIFY_PATH=1`: do not change your shell profile.
+- `RAPTOR_CHANNEL=unstable`: install the newest dev build.
+
+**An older install in `/usr/local/bin`:** on macOS, if you own the file, you
+can keep it: `raptor upgrade` replaces it in place. On Linux, `raptor upgrade`
+cannot replace it; it installs a new copy in `~/.local/bin` and tells you if your
+PATH still runs the old one. To keep one copy, run the script, then remove the
+old copy: `sudo rm /usr/local/bin/raptor`.
+
 ### Download Pre-built Binaries
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/Facets-cloud/raptor-releases/releases):
+To install by hand, download the release for your platform from
+[GitHub Releases](https://github.com/Facets-cloud/raptor-releases/releases) into a
+folder that you own and that is on your PATH:
 
-**Linux:**
 ```bash
-# AMD64
-wget https://github.com/Facets-cloud/raptor-releases/releases/latest/download/raptor-linux-amd64
-chmod +x raptor-linux-amd64
-sudo mv raptor-linux-amd64 /usr/local/bin/raptor
-
-# ARM64
-wget https://github.com/Facets-cloud/raptor-releases/releases/latest/download/raptor-linux-arm64
-chmod +x raptor-linux-arm64
-sudo mv raptor-linux-arm64 /usr/local/bin/raptor
+mkdir -p ~/.local/bin
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')                    # linux or darwin
+ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')      # amd64 or arm64
+curl -fL -o ~/.local/bin/raptor "https://github.com/Facets-cloud/raptor-releases/releases/latest/download/raptor-$OS-$ARCH"
+chmod +x ~/.local/bin/raptor
 ```
 
-**macOS:**
-```bash
-# Intel (AMD64)
-curl -LO https://github.com/Facets-cloud/raptor-releases/releases/latest/download/raptor-darwin-amd64
-chmod +x raptor-darwin-amd64
-sudo mv raptor-darwin-amd64 /usr/local/bin/raptor
-
-# Apple Silicon (ARM64)
-curl -LO https://github.com/Facets-cloud/raptor-releases/releases/latest/download/raptor-darwin-arm64
-chmod +x raptor-darwin-arm64
-sudo mv raptor-darwin-arm64 /usr/local/bin/raptor
-```
+If `~/.local/bin` is not on your PATH, add `export PATH="$HOME/.local/bin:$PATH"`
+to your shell profile.
 
 **Windows:**
 Download `raptor-windows-amd64.exe` or `raptor-windows-arm64.exe` from the releases page and add to your PATH.
@@ -43,7 +53,8 @@ Download `raptor-windows-amd64.exe` or `raptor-windows-arm64.exe` from the relea
 git clone https://github.com/Facets-cloud/raptor.git
 cd raptor
 go build -o raptor
-sudo mv raptor /usr/local/bin/
+mkdir -p ~/.local/bin
+mv raptor ~/.local/bin/
 ```
 
 ## Quick Start
