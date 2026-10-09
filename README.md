@@ -27,6 +27,26 @@ cannot replace it; it installs a new copy in `~/.local/bin` and tells you if you
 PATH still runs the old one. To keep one copy, run the script, then remove the
 old copy: `sudo rm /usr/local/bin/raptor`.
 
+**Updates:** raptor upgrades itself. When a newer release exists, raptor
+downloads it in the background after a command and puts it in place for the next
+command. It does not do this in CI, in a container, as root, or when you cannot
+write to raptor's folder; there it tells you to run `raptor upgrade`. Set
+`RAPTOR_NO_AUTO_UPGRADE=1` to turn it off.
+
+### Install script (Windows)
+
+In PowerShell:
+
+```powershell
+$env:FACETS_CLI = 'raptor'; irm https://cross.facetsapp.cloud/cli/install.ps1 | iex
+```
+
+The script downloads `raptor.exe`, checks its SHA-256, and puts it in
+`%USERPROFILE%\.local\bin` without administrator rights, so a later
+`raptor upgrade` needs none either. It adds that folder to your user PATH and to
+the current window. `praxis login` also installs raptor this way, so a praxis
+user does not need this step.
+
 ### Download Pre-built Binaries
 
 To install by hand, download the release for your platform from
@@ -44,8 +64,9 @@ chmod +x ~/.local/bin/raptor
 If `~/.local/bin` is not on your PATH, add `export PATH="$HOME/.local/bin:$PATH"`
 to your shell profile.
 
-**Windows:**
-Download `raptor-windows-amd64.exe` or `raptor-windows-arm64.exe` from the releases page and add to your PATH.
+**Windows:** download `raptor-windows-amd64.exe` (or `-arm64.exe`) from the
+releases page, save it as `%USERPROFILE%\.local\bin\raptor.exe`, and add that
+folder to your user PATH.
 
 ### Build from Source
 
@@ -1143,7 +1164,8 @@ raptor whoami                # Show the authenticated identity / control plane
 raptor upgrade               # Self-update raptor to the latest release
 raptor report -m "..."       # Send a friction report to Facets (what went wrong, how you recovered)
 RAPTOR_CHANNEL=unstable raptor upgrade  # Follow the unstable channel: a dev build of every merge to main
-raptor install skill --agent codex  # Install the standalone Raptor skill (claude/gemini also supported)
+raptor install skill               # Install the Raptor skill into every agent host on this machine
+raptor uninstall skill             # Remove it again (files you changed stay)
 raptor blueprint-guide       # Print the blueprint authoring guide
 raptor cache status          # Inspect the local schema/metadata cache
 raptor cache clear           # Clear it
