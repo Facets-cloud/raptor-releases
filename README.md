@@ -113,14 +113,25 @@ This method is ideal for CI/CD pipelines and automated workflows.
 Use the interactive login command:
 
 ```bash
-raptor login
+raptor login                          # the [default] profile
+raptor login --profile acme           # a profile called acme; [default] does not change
+raptor login --profile acme --local   # also pin the current folder to acme
 ```
 
 This will:
-1. Prompt for your Control Plane URL
-2. Open your browser to generate a token
-3. Prompt for your username and token
-4. Save credentials to `~/.facets/credentials`
+1. Ask for your Control Plane URL, and a profile name if `--profile` is not given.
+   When `[default]` points at another control plane, the suggested name is the
+   new host's first label (for example `acme`). raptor replaces `[default]` only
+   when you type `default`.
+2. Open your browser on the personal access token page. Create a token there.
+   raptor gets the token and your username automatically. If the control plane
+   cannot send them, or you press Enter, raptor asks for your email (the one you
+   sign in with) and the token.
+3. Check the credentials with the control plane. raptor saves nothing when the
+   control plane does not accept them.
+4. Save credentials to `~/.facets/credentials` (mode 0600). With `--local`,
+   raptor also writes the profile name (never the token) to `.facets/profile` in
+   the current folder.
 
 Alternatively, manually create the credentials file at `~/.facets/credentials`:
 
@@ -138,15 +149,31 @@ token = prod-token
 
 ### Profile Selection
 
-Set the profile using the `FACETS_PROFILE` environment variable (defaults to `default` if not set):
+Selecting a profile never changes the credentials file. Every command picks its
+profile in this order (praxis uses the same order and the same file):
+
+1. `--profile NAME` on the command.
+2. `CONTROL_PLANE_URL` (with `FACETS_USERNAME` and `FACETS_TOKEN`).
+3. `PRAXIS_PROFILE`, then `FACETS_PROFILE`.
+4. The nearest `.facets/profile` pin file at or above the current folder (the
+   home folder is never a pin).
+5. `[default]`, else the only profile.
 
 ```bash
-export FACETS_PROFILE=production
-# Or use it inline with commands
-FACETS_PROFILE=production raptor get projects
+raptor get projects --profile production     # one command
+export FACETS_PROFILE=production             # one shell
+cd ~/work/acme && raptor profiles pin acme   # one folder, for every session in it
+raptor profiles set-default production       # the machine default, for every session
+raptor profiles                              # list profiles; "*" marks the one in use here
+raptor whoami                                # the profile in use here, and what selected it
 ```
 
-**Note:** Environment variables (`FACETS_USERNAME`, `FACETS_TOKEN`, `CONTROL_PLANE_URL`) always take precedence over profile-based authentication.
+Only `raptor profiles set-default` (and a login that you tell to replace
+`[default]`) changes the machine default. An AI agent's shell forgets `export`
+between commands, so an agent passes `--profile` on each command or works in a
+pinned folder. When an agent runs a command that selects no profile on a machine
+with more than one profile, raptor prints one line on stderr that names the
+profile it uses.
 
 ### Read-Only AI Access
 
@@ -996,7 +1023,6 @@ raptor create iac-module --source ./reference-modules \
 raptor create project-type microservices --description "Microservices catalog"
 raptor create project-type selected-services --description "Selected services" \
   --resource-type service/k8s --resource-type postgres/rds
-# Old import project-type commands are disabled; manifests never select uploads.
 
 # Delete a project type (by name). Projects still using it block the delete;
 # raptor names them first so you know what to move.
@@ -1163,7 +1189,7 @@ raptor module download service/k8s/0.2 --save-to ./modules/
 raptor whoami                # Show the authenticated identity / control plane
 raptor upgrade               # Self-update raptor to the latest release
 raptor report -m "..."       # Send a friction report to Facets (what went wrong, how you recovered)
-RAPTOR_CHANNEL=unstable raptor upgrade  # Follow the unstable channel: a dev build of every merge to main
+RAPTOR_CHANNEL=unstable raptor upgrade  # Follow the unstable channel: dev builds of main, published on demand
 raptor install skill               # Install the Raptor skill into every agent host on this machine
 raptor uninstall skill             # Remove it again (files you changed stay)
 raptor blueprint-guide       # Print the blueprint authoring guide
@@ -1273,7 +1299,7 @@ export FACETS_USERNAME=user@example.com
 export FACETS_TOKEN=your-api-token
 export CONTROL_PLANE_URL=https://your-org.console.facets.cloud
 
-# Method 2: Profile (defaults to "default" if not set)
+# Method 2: Profile (without a selection, raptor uses [default])
 export FACETS_PROFILE=default
 
 # 1. List your projects
