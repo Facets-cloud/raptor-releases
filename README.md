@@ -284,6 +284,24 @@ Notes:
 - Labels cannot be attached while a release is being created; no release
   endpoint accepts one. Label the release once it exists.
 
+### Release AI context
+
+A release can carry one free-text AI context for AI agents that read it later.
+Setting it replaces the old text. The release itself does not change.
+
+```bash
+# Set the context inline, from a file, or from stdin ('--file -')
+raptor set release-ai-context 6a86f8c6... -p myproject -e dev --content "Rolls back TICKET-421"
+raptor set release-ai-context 6a86f8c6... -p myproject -e dev --file notes.md
+
+# Show it: the text alone, or the full record with who set it and when
+raptor get release-ai-context 6a86f8c6... -p myproject -e dev
+raptor get release-ai-context -p myproject -e dev --trace-id "$TRACE" -o json
+
+# Remove it
+raptor delete release-ai-context 6a86f8c6... -p myproject -e dev -y
+```
+
 ### Environment Management
 
 ```bash
@@ -1000,6 +1018,8 @@ raptor create user-group --name platform --base-role ADMIN \
 # Update membership / roles
 raptor set user <USER_ID> --roles <ROLE_ID> --groups <GROUP_ID>
 raptor set user-group <GROUP_ID> --base-role VIEWER --changelog "scope down"
+raptor set user-group <GROUP_ID> --env-roles shop/prod=VIEWER,shop/staging=VIEWER
+raptor set user-group <GROUP_ID> --remove-env-roles shop/staging
 
 # Delete
 raptor delete user <USER_ID> --yes
