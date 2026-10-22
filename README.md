@@ -462,7 +462,7 @@ raptor get variable DB_PASSWORD -p myproject --show-secrets
 # Create a variable
 raptor create variable API_URL --default https://api.example.com -p myproject
 
-# Create a secret (secrets never have a stack default — values are set per
+# Create a secret (raptor gives a secret no stack default — values are set per
 # environment only, even if the value should be the same in every environment)
 raptor create variable DB_PASSWORD -p myproject --secret \
   --env-values prod=prodSecret123,staging=stagingSecret456
@@ -556,8 +556,8 @@ partial failures. Verify persistence before retrying. See
 ]
 ```
 
-> **Note:** Secrets never have a stack-level default value — `stackDefault` is
-> rejected for secrets in both create and update files. Secret values can only
+> **Note:** raptor does not give a secret a stack-level default value —
+> `stackDefault` is rejected for secrets in both create and update files. Secret values can only
 > be set per environment via `envValues`/`clusterIdToValueMap`, even if the
 > value should be the same in every environment.
 
