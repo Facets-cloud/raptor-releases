@@ -191,7 +191,7 @@ This replaces the retired global `RAPTOR_READ_ONLY` setting (and its `RAPTOR_BYP
 
 ```bash
 # List available resource types for your project
-raptor get resource-types -t <project-type>
+raptor get resource-types -p myproject
 
 # Get resource type schema
 raptor get resource-type-schema service/k8s/0.2
@@ -313,7 +313,7 @@ raptor get resource-status -p myproject -e dev service/api
 
 # Get/set environment-specific overrides
 raptor get resource-overrides -p myproject -e dev service/api
-raptor set resource-overrides -p myproject -e dev -f overrides.json service/api
+raptor apply override service/api -p myproject -e dev --set spec.env.LOG_LEVEL=debug
 
 # List revision history for an override
 raptor get overrides -p myproject -e dev service/api --history
@@ -649,7 +649,7 @@ raptor describe expressions -p myproject -e stage --kind postgres --names db,eve
   --value 'db.internal' --value 'events.internal' -o json
 
 # Get output schema for a specific type
-raptor get output-schema @facets/eks
+raptor get output-type @facets/eks
 ```
 
 Reverse value lookup requires `-p`, `-e`, and at least one resource filter.
@@ -687,8 +687,8 @@ raptor get iac-module service/k8s/0.2 --usages
 # List publish history
 raptor get iac-module service/k8s/0.2 --history
 
-# Inspect one revision
-raptor get iac-module service/k8s/0.2 --history --version 40
+# Download the files of one revision
+raptor get iac-module service/k8s/0.2 --sub-version 40 --save-to ./service-k8s-v40/
 
 # Diff latest two publishes
 raptor get iac-module service/k8s/0.2 --history --diff
@@ -841,7 +841,7 @@ raptor copy config -p myproject --from dev --to staging --exclude OVERRIDES --ye
 ### Environment Overrides (apply override)
 
 `apply override` is the ergonomic, field-level way to edit environment-specific
-overrides (the read-modify-write counterpart to `set resource-overrides -f`).
+overrides.
 
 ```bash
 # Merge individual fields into an existing override
@@ -984,7 +984,7 @@ raptor create account --provider aws --name my-aws -w
 # Create a VCS account with a personal access token
 raptor create github-account --name gh --username me --token <TOKEN> [--org ORG] [--enterprise-host HOST]
 raptor create gitlab-account --name gl --username me --token <TOKEN>
-raptor create bitbucket-account --name bb --username me --token <TOKEN> [--project-key KEY]
+raptor create bitbucket-account --name bb --user-email me@example.com --token <TOKEN> [--org WORKSPACE] [--project-key KEY]
 
 # Create a VCS account via the OAuth app flow (-w waits for authorization)
 raptor create github-app-account --name gh-app -w
@@ -1200,7 +1200,7 @@ raptor module delete-output-type @myorg/s3
 
 # Discover available output types for a project type, download module sources
 raptor module discover --project-type microservices
-raptor module download service/k8s/0.2 --save-to ./modules/
+raptor module download service/k8s/0.2 --dir ./modules/
 ```
 
 ### Utility & Maintenance
@@ -1325,9 +1325,8 @@ export FACETS_PROFILE=default
 # 1. List your projects
 raptor get projects
 
-# 2. Find available resource types (get project type first)
-raptor get project-types
-raptor get resource-types -t microservices
+# 2. Find the resource types available in the project
+raptor get resource-types -p myproject
 
 # 3. Get the schema and required inputs
 raptor get resource-type-schema service/k8s/0.2
@@ -1365,16 +1364,11 @@ raptor get resource-status -p myproject -e dev service/my-service
 
 ```bash
 # Get current overrides
-raptor get resource-overrides -p myproject -e dev service/api -o json > overrides.json
+raptor get resource-overrides -p myproject -e dev service/api
 
-# Edit overrides.json
-# {
-#   "spec.env.LOG_LEVEL": "debug",
-#   "spec.runtime.size.memory": "2Gi"
-# }
-
-# Apply overrides
-raptor set resource-overrides -p myproject -e dev -f overrides.json service/api
+# Change fields (merges into the existing override; other fields are kept)
+raptor apply override service/api -p myproject -e dev \
+  --set spec.env.LOG_LEVEL=debug --set spec.runtime.size.memory=2Gi
 ```
 
 ## Common Commands
@@ -1384,14 +1378,14 @@ raptor set resource-overrides -p myproject -e dev -f overrides.json service/api
 ```bash
 # List resource types
 raptor get project-types
-raptor get resource-types -t <project-type>
+raptor get resource-types -p <project>
 
 # Get schema and metadata
 raptor get resource-type-schema <type>/<flavor>/<version>
 raptor get resource-type-inputs <type>/<flavor>/<version>
 raptor get resource-type-outputs <type>/<flavor>/<version>
-raptor get output-schema @<namespace>/<name>
-raptor get iac-module <type>/<flavor>/<version> [-o <output-path>]
+raptor get output-type @<namespace>/<name>
+raptor get iac-module <type>/<flavor>/<version> [--save-to <path>]
 
 # Work with resources
 raptor get resources -p <project>
@@ -1412,7 +1406,7 @@ raptor get environments -p <project>
 # Pending-release status and overrides
 raptor get resource-status -p <project> -e <env> [<type>/<name>] [--pending-only]
 raptor get resource-overrides -p <project> -e <env> <type>/<name>
-raptor set resource-overrides -p <project> -e <env> -f <file> <type>/<name>
+raptor apply override <type>/<name> -p <project> -e <env> --set <key>=<value>
 
 # Get runtime outputs
 raptor get resource-outputs -p <project> -e <env> <type>/<name>
