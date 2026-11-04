@@ -224,6 +224,14 @@ raptor delete resource -p myproject service/old-api
 # List releases in an environment
 raptor get releases -p myproject -e dev
 
+# Release history for one resource, failed releases included. Selective releases
+# match when they targeted it; full releases when they added, modified or removed
+# it (full plans never match). Scans the --limit newest releases (max 1000); when
+# that window is full, stderr says to raise --limit (or, at 1000, that older
+# releases were not scanned). For config changes, use
+# `raptor get resource service/api -p myproject -e dev --history`.
+raptor get releases -p myproject -e dev --resource service/api --limit 200
+
 # Create a release (deploy)
 raptor create release -p myproject -e dev -w -m "Deploy new feature"
 
@@ -1429,6 +1437,7 @@ raptor create release -p <project> -e <env> --target <type>/<name> -w
 # View releases
 raptor get releases -p <project> -e <env>
 raptor get releases -p <project> -e <env> <release-id>
+raptor get releases -p <project> -e <env> --resource <type>/<name> [--limit N]
 
 # View logs
 raptor logs release -p <project> -e <env> [-f] <release-id>
