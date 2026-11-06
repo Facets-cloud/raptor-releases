@@ -731,8 +731,12 @@ Publication is non-interactive and requires a nonempty root `README.md` in the
 uploaded PREVIEW. Compatible updates require `--backward-compatible yes` on the
 same published version; breaking updates require a greater version and
 `--versionupgrade`. First publication uses neither flag, and the flags cannot
-be combined. `--skip-validation` skips local upload checks only. If upload
-succeeds but publication fails, the command returns nonzero and reports the
+be combined. With `--publish`, the command checks the declaration against the
+published versions before the upload, also with `--dry-run`. For a directory,
+it also checks the root `README.md` before the upload. A refused check uploads
+nothing. A `--dry-run` never uploads, also for a ZIP archive. A `--dry-run` without `--publish` tells you which
+declaration a later publication needs. `--skip-validation` skips local upload
+checks only. If upload succeeds but publication fails, the command returns nonzero and reports the
 PREVIEW for recovery. See [publish guards](docs/2026-09-14-module-publish-guards.md).
 
 ### Audit Logs
