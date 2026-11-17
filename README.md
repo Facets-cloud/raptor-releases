@@ -294,13 +294,15 @@ Notes:
 
 ### Release AI context
 
-A release can carry one free-text AI context for AI agents that read it later.
-Setting it replaces the old text. The release itself does not change.
+A release can carry one free-text AI context: debugging notes for AI agents that
+read it later. Setting it replaces the old text, and `--append` adds to it. The
+release itself does not change. `raptor get releases RELEASE_ID` shows the context.
 
 ```bash
 # Set the context inline, from a file, or from stdin ('--file -')
-raptor set release-ai-context 6a86f8c6... -p myproject -e dev --content "Rolls back TICKET-421"
+raptor set release-ai-context 6a86f8c6... -p myproject -e dev --content "Failed at apply: RDS param group in use"
 raptor set release-ai-context 6a86f8c6... -p myproject -e dev --file notes.md
+raptor set release-ai-context 6a86f8c6... -p myproject -e dev --append --content "Same failure on retry"
 
 # Show it: the text alone, or the full record with who set it and when
 raptor get release-ai-context 6a86f8c6... -p myproject -e dev
@@ -809,6 +811,9 @@ raptor debug release <RELEASE_ID> terraform state list
 
 # Submit a custom release made of explicit commands (repeat -c)
 raptor create custom-release -p myproject -e dev -c "terraform plan" -c "terraform apply"
+
+# Remove a stale Terraform state lock (lock id is in the failed release log)
+raptor create unlock-state-release -p myproject -e dev --lock-id <LOCK_ID>
 ```
 
 ### Environment Lifecycle
@@ -1263,7 +1268,7 @@ Every resource file must include:
 - **Filename becomes resource name:** `my-service.json` → resource name `my-service`, full ID: `service/my-service`
 - **Inputs:** Mandatory dependencies on other resources (set using `raptor set resource-inputs`)
 - **Resource Output Expressions:** `${...}` syntax for dynamic values in spec fields
-- **metadata.name:** Optional override for filename-based naming
+- **metadata.name:** A module input, not the resource name. Some modules use it as the name of the cloud object. `apply -f` always takes the resource name from the file name
 
 **Important:** Always check the schema first:
 ```bash
@@ -1495,7 +1500,7 @@ raptor get iac-module --source CUSTOM --stage PUBLISHED
 raptor get iac-module <type>/<flavor>/<version> [--save-to <path>]
 raptor get iac-module <module-id> [--save-to <path>]
 raptor get iac-module <type>/<flavor>/<version> --details
-raptor get iac-module <type>/<flavor>/<version> --usages
+raptor get iac-module <type>/<flavor>/<version> --usages [-o wide|json|yaml]
 
 # Upload and publish modules
 raptor create iac-module -f <directory> [--type <type>] [--flavor <flavor>] [--version <version>]
